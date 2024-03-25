@@ -15,9 +15,13 @@ default = ["alloc"]
 alloc = []
 std = ["alloc"]
 web = ["web-time"]
+async-verify = ["alloc", "dep:async-trait"]
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
 web-time = { version = "1", optional = true }
+
+[dependencies]
+async-trait = { version = "0.1.79", optional = true}
 
 [package.metadata.docs.rs]
 all-features = true

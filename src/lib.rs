@@ -554,6 +554,93 @@ pub trait SignatureVerificationAlgorithm: Send + Sync + fmt::Debug {
     }
 }
 
+
+/// An abstract asynchronous signature verification algorithm.
+/// 
+/// This trait is an analog to [`SignatureVerificationAlgorithm`] which allows for 
+/// asynchronous processing of signature verification. This could be used for an accelerated
+/// coprocessor in embedded contexts, for example.
+/// 
+/// Trait uses `async-trait` as trait objects of `async function in trait` is not stable.
+///
+/// One of these is needed per supported pair of public key type (identified
+/// with `public_key_alg_id()`) and `signatureAlgorithm` (identified with
+/// `signature_alg_id()`).  Note that both of these `AlgorithmIdentifier`s include
+/// the parameters encoding, so separate `SignatureVerificationAlgorithm`s are needed
+/// for each possible public key or signature parameters.
+///
+/// Debug implementations should list the public key algorithm identifier and
+/// signature algorithm identifier in human friendly form (i.e. not encoded bytes),
+/// along with the name of the implementing library (to distinguish different
+/// implementations of the same algorithms).
+#[cfg(feature = "async-verify")]
+#[async_trait::async_trait]
+pub trait AsyncSignatureVerificationAlgorithm: Send + Sync + fmt::Debug {
+    /// Verify a signature.
+    ///
+    /// `public_key` is the `subjectPublicKey` value from a `SubjectPublicKeyInfo` encoding
+    /// and is untrusted.  The key's `subjectPublicKeyInfo` matches the [`AlgorithmIdentifier`]
+    /// returned by `public_key_alg_id()`.
+    ///
+    /// `message` is the data over which the signature was allegedly computed.
+    /// It is not hashed; implementations of this trait function must do hashing
+    /// if that is required by the algorithm they implement.
+    ///
+    /// `signature` is the signature allegedly over `message`.
+    ///
+    /// Return `Ok(())` only if `signature` is a valid signature on `message`.
+    ///
+    /// Return `Err(InvalidSignature)` if the signature is invalid, including if the `public_key`
+    /// encoding is invalid.  There is no need or opportunity to produce errors
+    /// that are more specific than this.
+    async fn verify_signature(
+        &self,
+        public_key: &[u8],
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<(), InvalidSignature>;
+
+    /// Return the `AlgorithmIdentifier` that must equal a public key's
+    /// `subjectPublicKeyInfo` value for this `AsyncSignatureVerificationAlgorithm`
+    /// to be used for signature verification.
+    fn public_key_alg_id(&self) -> AlgorithmIdentifier;
+
+    /// Return the `AlgorithmIdentifier` that must equal the `signatureAlgorithm` value
+    /// on the data to be verified for this `AsyncSignatureVerificationAlgorithm` to be used
+    /// for signature verification.
+    fn signature_alg_id(&self) -> AlgorithmIdentifier;
+
+    /// Return `true` if this is backed by a FIPS-approved implementation.
+    fn fips(&self) -> bool {
+        false
+    }
+}
+
+#[cfg(feature = "async-verify")]
+#[async_trait::async_trait]
+impl <'a> AsyncSignatureVerificationAlgorithm for dyn SignatureVerificationAlgorithm + 'a {
+    async fn verify_signature(
+        &self,
+        public_key: &[u8],
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<(), InvalidSignature> {
+        <Self as SignatureVerificationAlgorithm>::verify_signature(&*self, public_key, message, signature)
+    }
+
+    fn public_key_alg_id(&self) -> AlgorithmIdentifier {
+        <Self as SignatureVerificationAlgorithm>::public_key_alg_id(&*self)
+    }
+
+    fn signature_alg_id(&self) -> AlgorithmIdentifier {
+        <Self as SignatureVerificationAlgorithm>::signature_alg_id(&*self)
+    }
+
+    fn fips(&self) -> bool {
+        <Self as SignatureVerificationAlgorithm>::fips(&*self)
+    }
+} 
+
 /// A detail-less error when a signature is not valid.
 #[derive(Debug, Copy, Clone)]
 pub struct InvalidSignature;
