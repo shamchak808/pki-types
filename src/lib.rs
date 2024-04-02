@@ -554,7 +554,6 @@ pub trait SignatureVerificationAlgorithm: Send + Sync + fmt::Debug {
     }
 }
 
-
 /// An abstract asynchronous signature verification algorithm.
 /// 
 /// This trait is an analog to [`SignatureVerificationAlgorithm`] which allows for 
@@ -625,21 +624,55 @@ impl <'a> AsyncSignatureVerificationAlgorithm for dyn SignatureVerificationAlgor
         message: &[u8],
         signature: &[u8],
     ) -> Result<(), InvalidSignature> {
-        <Self as SignatureVerificationAlgorithm>::verify_signature(&*self, public_key, message, signature)
+        <Self as SignatureVerificationAlgorithm>::verify_signature(self, public_key, message, signature)
     }
 
     fn public_key_alg_id(&self) -> AlgorithmIdentifier {
-        <Self as SignatureVerificationAlgorithm>::public_key_alg_id(&*self)
+        <Self as SignatureVerificationAlgorithm>::public_key_alg_id(self)
     }
 
     fn signature_alg_id(&self) -> AlgorithmIdentifier {
-        <Self as SignatureVerificationAlgorithm>::signature_alg_id(&*self)
+        <Self as SignatureVerificationAlgorithm>::signature_alg_id(self)
     }
 
     fn fips(&self) -> bool {
-        <Self as SignatureVerificationAlgorithm>::fips(&*self)
+        <Self as SignatureVerificationAlgorithm>::fips(self)
     }
-} 
+}
+
+/// Wrapper struct around a `SignatureVerificationAlgorithm` to help for non-trivial
+/// casts between trait objects
+#[cfg(feature = "async-verify")]
+#[derive(Debug)]
+pub struct AsyncWrapperImpl<'a> {
+    /// implementation of a SignatureVerificationAlgorithm
+    pub algorithm: &'a dyn SignatureVerificationAlgorithm,
+}
+
+#[cfg(feature = "async-verify")]
+#[async_trait::async_trait]
+impl<'a> AsyncSignatureVerificationAlgorithm for AsyncWrapperImpl<'a> {
+    async fn verify_signature(
+        &self,
+        public_key: &[u8],
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<(), InvalidSignature> {
+        self.algorithm.verify_signature(public_key, message, signature)
+    }
+
+    fn public_key_alg_id(&self) -> AlgorithmIdentifier {
+        self.algorithm.public_key_alg_id()
+    }
+
+    fn signature_alg_id(&self) -> AlgorithmIdentifier {
+        self.algorithm.signature_alg_id()
+    }
+
+    fn fips(&self) -> bool {
+        self.algorithm.fips()
+    }
+}
 
 /// A detail-less error when a signature is not valid.
 #[derive(Debug, Copy, Clone)]
